@@ -95,7 +95,7 @@ class DiskMonitor extends EventEmitter {
       '$cut=[datetime]"' + cutoffDate + '";' +
       '$r=@();' +
       'foreach($d in @($env:TEMP,"$env:LOCALAPPDATA\\Temp","$env:USERPROFILE\\Downloads","$env:LOCALAPPDATA\\Microsoft\\Windows\\INetCache","$env:USERPROFILE\\.cache")){' +
-        'if(Test-Path $d){$r+=q $d 2 | ?{$_.LastWriteTime -gt $cut}}}' +
+        'if(Test-Path $d){$r+=q $d 2 | ?{$_.LastWriteTime -gt $cut -and $_.FullName -like \"C:\\*\"}}}' +
       '$r+=Get-ChildItem C:\\ -File -ErrorAction SilentlyContinue | ?{$_.LastWriteTime -gt $cut -and $_.Length -gt 10MB};' +
       '$r | Group FullName | %{$_.Group[0]} | Sort Length -Descending | Select -First 50 FullName,Length,LastWriteTime,Extension,DirectoryName | ConvertTo-Json -Compress';
     const raw = await this.runPowershell(script);
