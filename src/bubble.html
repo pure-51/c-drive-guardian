@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--card-bg:#18181b;--card-border:rgba(255,255,255,0.1);--text:#f4f4f5;--text-sec:#a1a1aa;--cmd-bg:#09090b;--cmd-border:rgba(255,255,255,0.06);--btn-bg:rgba(255,255,255,0.05);--btn-border:rgba(255,255,255,0.1);--btn-hover:rgba(255,255,255,0.1);--green:rgba(74,222,128,0.15);--green-t:#4ade80;--yellow:rgba(251,191,36,0.15);--yellow-t:#fbbf24;--gray:rgba(161,161,170,0.12);--gray-t:#a1a1aa}
+@media(prefers-color-scheme:light){
+:root{--card-bg:#fff;--card-border:rgba(0,0,0,0.08);--text:#18181b;--text-sec:#52525b;--cmd-bg:#f4f4f5;--cmd-border:rgba(0,0,0,0.06);--btn-bg:#fff;--btn-border:#d1d5db;--btn-hover:#f9fafb;--green:rgba(74,222,128,0.15);--green-t:#16a34a;--yellow:rgba(251,191,36,0.15);--yellow-t:#d97706;--gray:rgba(161,161,170,0.12);--gray-t:#71717a}
+}
+html,body{width:100%;height:100%;overflow:hidden;background:transparent;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;-webkit-font-smoothing:antialiased;user-select:none}
+body{padding:6px}
+.card{background:var(--card-bg);border:1px solid var(--card-border);border-radius:16px;padding:14px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.3),inset 0 1px 0 rgba(255,255,255,0.05);color:var(--text);opacity:0;transform:translateX(60px);transition:opacity .35s ease,transform .4s ease;overflow:hidden}
+.card.show{opacity:1;transform:translateX(0)}
+.card.hide{opacity:0;transform:translateX(60px)}
+.header{display:flex;align-items:center;gap:6px;margin-bottom:6px;-webkit-app-region:drag}
+.header-title{font-size:13px;font-weight:600;color:var(--text);letter-spacing:.02em}
+.pill{display:inline-flex;align-items:center;padding:3px 8px;border-radius:6px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#fff;background:#2563eb;margin-bottom:6px}
+.pill.p-high{background:#dc2626}
+.pill.p-mid{background:#d97706}
+.summary{font-size:12px;line-height:1.5;color:var(--text-sec);background:var(--cmd-bg);border:1px solid var(--cmd-border);border-radius:8px;padding:8px 10px;margin-bottom:8px}
+.chips{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.chip{font-size:10px;padding:2px 7px;border-radius:4px;background:rgba(255,255,255,0.05);color:var(--text-sec);border:1px solid rgba(255,255,255,0.06)}
+.chip.safe{background:var(--green);color:var(--green-t);border-color:var(--green)}
+.chip.mov{background:var(--yellow);color:var(--yellow-t);border-color:var(--yellow)}
+.buttons{display:flex;gap:6px}
+.btn{flex:1;padding:7px 0;border:1px solid var(--btn-border);border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;text-align:center;background:var(--btn-bg);color:var(--text);transition:background .15s,border-color .15s}
+.btn:hover{background:var(--btn-hover)}
+.btn.primary{background:#2563eb;color:#fff;border-color:#2563eb}
+.btn.primary:hover{background:#3b82f6}
+.detail{display:none;margin-top:8px;max-height:200px;overflow-y:auto;border-top:1px solid var(--card-border);padding-top:6px}
+.drow{display:flex;align-items:flex-start;gap:6px;padding:6px 4px;font-size:11px;border-bottom:1px solid rgba(255,255,255,0.04)}
+.drow input[type=checkbox]{accent-color:#2563eb;width:14px;height:14px;margin-top:2px;flex-shrink:0;cursor:pointer}
+.dname{flex:1;min-width:0}
+.dpath{font-size:11px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-bottom:2px}
+.dmeta{font-size:10px;color:var(--text-sec)}
+.dtag{font-size:10px;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:1px}
+.dtag.safe{background:var(--green);color:var(--green-t)}
+.dtag.mov{background:var(--yellow);color:var(--yellow-t)}
+.dtag.skip{background:var(--gray);color:var(--gray-t)}
+.detail::-webkit-scrollbar{width:4px}
+.detail::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
+</style>
+</head>
+<body>
+<div class="card" id="card">
+  <div class="header">
+    <span>💾</span>
+    <span class="header-title">C 盘告警</span>
+  </div>
+  <div class="pill" id="pill"></div>
+  <div class="summary" id="summary"></div>
+  <div class="chips" id="chips"></div>
+  <div class="buttons">
+    <div class="btn primary" id="btnClean">一键清理</div>
+    <div class="btn" id="btnDetail">查看详情</div>
+    <div class="btn" id="btnDismiss">暂不处理</div>
+  </div>
+  <div class="detail" id="detail"></div>
+</div>
+<script>
+var _data = null;
+
+function show(data) {
+  _data = data;
+  var card = document.getElementById("card");
+  card.classList.remove("hide");
+
+  var dmb = data.deltaMB || 0;
+  var cleanable = (data.files || []).filter(function(f){return f.canDelete}).length;
+  var movable = (data.files || []).filter(function(f){return f.canMove}).length;
+
+  // Pill
+  var pill = document.getElementById("pill");
+  pill.className = "pill";
+  if (dmb > 500) pill.classList.add("p-high");
+  else if (dmb > 200) pill.classList.add("p-mid");
+  pill.textContent = "+" + dmb + "MB " + (dmb > 500 ? "严重" : "提醒");
+
+  // Summary
+  var summary = document.getElementById("summary");
+  var h = "<b>C 盘已用空间增加 " + dmb + " MB</b>";
+  if (data.reason === "incremental") h += "（累计达标）";
+  if (cleanable > 0) h += "<br>✅ " + cleanable + " 个文件<b>可安全删除</b>";
+  if (movable > 0) h += "<br>📦 " + movable + " 个文件<b>建议移动</b>";
+  summary.innerHTML = h;
+
+  // Chips
+  var chips = document.getElementById("chips");
+  chips.innerHTML = "";
+  var cats = {};
+  if (data.files) for (var i = 0; i < data.files.length; i++) {
+    var l = data.files[i].label || "其他";
+    cats[l] = (cats[l] || 0) + 1;
+  }
+  for (var l in cats) {
+    var ch = document.createElement("span");
+    ch.className = "chip";
+    if (l === "临时文件" || l === "缓存文件" || l === "日志文件") ch.classList.add("safe");
+    else if (l === "下载文件") ch.classList.add("mov");
+    ch.textContent = l + (cats[l] > 1 ? " x" + cats[l] : "");
+    chips.appendChild(ch);
+  }
+
+  // Detail
+  var detail = document.getElementById("detail");
+  detail.innerHTML = "";
+  detail.style.display = "none";
+  if (data.files) for (var i = 0; i < data.files.length; i++) {
+    var f = data.files[i];
+    var r = document.createElement("div"); r.className = "drow";
+    // Checkbox for manual selection (only enabled for cleanable files)
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.className = "file-cb";
+    cb.dataset.idx = i;
+    if (f.canDelete) { cb.disabled = false; cb.checked = true; cb.addEventListener("change", updateSelCount); }
+    else { cb.disabled = true; cb.style.opacity = "0.3"; }
+    r.appendChild(cb);
+    var n = document.createElement("div"); n.className = "dname";
+    var p = document.createElement("div"); p.className = "dpath";
+    p.textContent = f.path || "(unknown)";
+    p.title = f.path || "";
+    var m = document.createElement("div"); m.className = "dmeta";
+    var sz = f.size ? "(" + (f.size/1048576).toFixed(1) + "MB," : "(0MB,";
+    if (f.canDelete) m.textContent = sz + "可安全删除)";
+    else if (f.canMove) m.textContent = sz + "建议移动)";
+    else if (f.locked) m.textContent = sz + "被占用)";
+    else m.textContent = sz + "保留)";
+    n.appendChild(p); n.appendChild(m);
+    var t = document.createElement("span"); t.className = "dtag";
+    if (f.canDelete) { t.classList.add("safe"); t.textContent = "可删除"; }
+    else if (f.canMove) { t.classList.add("mov"); t.textContent = "可移动"; }
+    else { t.classList.add("skip"); t.textContent = "保留"; }
+    r.appendChild(n); r.appendChild(t);
+    detail.appendChild(r);
+  }
+  // Clean selected button (hidden by default)
+  var selClean = document.createElement("div");
+  selClean.id = "btnSelClean";
+  selClean.className = "btn";
+  selClean.textContent = "清理选中 (0)";
+  selClean.style.cssText = "display:none;margin-top:6px";
+  selClean.addEventListener("click", doCleanSelected);
+  detail.parentNode.insertBefore(selClean, detail.nextSibling);
+
+  // Show
+  requestAnimationFrame(function(){ card.classList.add("show"); });
+  reportHeight();
+}
+
+function updateSelCount() {
+  var cbs = document.querySelectorAll(".file-cb:not(:disabled)");
+  var checked = 0;
+  for (var i = 0; i < cbs.length; i++) { if (cbs[i].checked) checked++; }
+  var btn = document.getElementById("btnSelClean");
+  if (btn) btn.textContent = "清理选中 (" + checked + ")";
+}
+
+function doCleanSelected() {
+  if (!_data || !_data.files) return;
+  var cbs = document.querySelectorAll(".file-cb:not(:disabled)");
+  var paths = [];
+  for (var i = 0; i < cbs.length; i++) {
+    if (cbs[i].checked) paths.push(_data.files[parseInt(cbs[i].dataset.idx)].path);
+  }
+  if (!paths.length) return;
+  window.diskAPI.clean(paths).then(function(r) {
+    if (r && r.cancelled) return;
+    var freed = r ? Math.round((r.freed||0)/1048576) : 0;
+    var deleted = r ? r.deleted||0 : 0;
+    var fl = r ? r.failed||0 : 0;
+    var summary = document.getElementById("summary");
+    var msg = "✅ 已清理 <b>" + deleted + "</b> 个文件，释放约 <b>" + freed + " MB</b>";
+    if (fl > 0) msg += "，" + fl + " 个失败";
+    summary.innerHTML = msg;
+    document.getElementById("btnClean").style.display = "none";
+    document.getElementById("btnDetail").style.display = "none";
+    document.getElementById("btnSelClean").style.display = "none";
+    var dismiss = document.getElementById("btnDismiss");
+    dismiss.textContent = "关闭";
+    dismiss.style.flex = "1";
+  }).catch(function(){});
+}
+
+function doClean() {
+  if (!_data || !_data.files) return;
+  var paths = _data.files.filter(function(f){return f.canDelete}).map(function(f){return f.path});
+  if (!paths.length) return;
+  window.diskAPI.clean(paths).then(function(r) {
+    if (r && r.cancelled) return;
+    var freed = r ? Math.round((r.freed||0)/1048576) : 0;
+    var deleted = r ? r.deleted||0 : 0;
+    var fl = r ? r.failed||0 : 0;
+    var summary = document.getElementById("summary");
+    var msg = "✅ 已清理 <b>" + deleted + "</b> 个文件，释放约 <b>" + freed + " MB</b>";
+    if (fl > 0) msg += "，" + (_data.files.length - deleted) + " 个被占用已跳过";
+    summary.innerHTML = msg;
+    document.getElementById("btnClean").style.display = "none";
+    document.getElementById("btnDetail").style.display = "none";
+    document.getElementById("btnSelClean").style.display = "none";
+    var dismiss = document.getElementById("btnDismiss");
+    dismiss.textContent = "关闭";
+    dismiss.style.flex = "1";
+  }).catch(function(){});
+}
+
+function toggleDetail() {
+  var d = document.getElementById("detail");
+  var show = d.style.display === "none";
+  d.style.display = show ? "block" : "none";
+  document.getElementById("btnSelClean").style.display = show ? "block" : "none";
+  if (show) updateSelCount();
+  reportHeight();
+}
+
+function doDismiss() {
+  var card = document.getElementById("card");
+  card.classList.add("hide");
+  setTimeout(function(){
+    window.diskAPI.dismiss();
+  }, 350);
+}
+
+function reportHeight() {
+  var card = document.getElementById("card");
+  var h = Math.max(card.offsetHeight, card.scrollHeight) + 12;
+  window.diskAPI.reportHeight(h);
+}
+
+// Bind events
+document.getElementById("btnClean").addEventListener("click", doClean);
+document.getElementById("btnDetail").addEventListener("click", toggleDetail);
+document.getElementById("btnDismiss").addEventListener("click", doDismiss);
+
+// Wait for data
+window.diskAPI.onShow(function(data){ show(data); });
+window.diskAPI.onHide(function(){ doDismiss(); });
+</script>
+</body>
+</html>

@@ -1,0 +1,42 @@
+{
+  "name": "c-drive-guardian",
+  "version": "1.0.0",
+  "description": "C 盘卫士 - 实时监控 C 盘空间变化，自动识别可清理文件",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "node launch.js",
+    "build": "electron-builder --win nsis:x64",
+    "generate-icons": "node scripts/generate-icons.js"
+  },
+  "author": "",
+  "license": "AGPL-3.0-only",
+  "type": "commonjs",
+  "build": {
+    "appId": "com.cdriveguardian.app",
+    "productName": "C-Drive Guardian",
+    "win": {
+      "icon": "assets/icon.ico",
+      "artifactName": "C-Drive-Guardian-Setup-${version}-${arch}.${ext}",
+      "target": [{ "target": "nsis", "arch": ["x64"] }]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "C-Drive Guardian",
+      "runAfterFinish": true
+    },
+    "files": [
+      "src/**/*",
+      "assets/icon.ico",
+      "assets/tray-icon.png"
+    ],
+    "extraResources": []
+  },
+  "devDependencies": {
+    "electron": "^41.0.2",
+    "electron-builder": "^26.8.1",
+    "sharp": "^0.35.3"
+  }
+}

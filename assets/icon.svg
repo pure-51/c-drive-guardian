@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
+    </linearGradient>
+    <linearGradient id="highlight" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="rgba(255,255,255,0.25)"/>
+      <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+    </linearGradient>
+  </defs>
+
+  <!-- 阴影 -->
+  <ellipse cx="128" cy="220" rx="72" ry="14" fill="rgba(0,0,0,0.1)"/>
+
+  <!-- 盾牌主体 -->
+  <path d="M128 16 L224 52 L224 112 Q224 178 128 240 Q32 178 32 112 L32 52 Z"
+        fill="url(#shieldGrad)" stroke="#1E40AF" stroke-width="4" stroke-linejoin="round"/>
+
+  <!-- 盾牌高光 -->
+  <path d="M128 16 L224 52 L224 112 Q224 178 128 240 Q32 178 32 112 L32 52 Z"
+        fill="url(#highlight)"/>
+
+  <!-- 盾牌边框内描边（增加层次感） -->
+  <path d="M128 32 L210 64 L210 110 Q210 168 128 226 Q46 168 46 110 L46 64 Z"
+        fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2"/>
+
+  <!-- 字母 C -->
+  <path d="M168 100 Q168 76 146 72 Q120 68 104 80 Q86 96 86 128 Q86 160 104 176 Q120 188 146 184 Q168 180 168 156"
+        fill="none" stroke="white" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
