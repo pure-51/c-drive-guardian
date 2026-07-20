@@ -146,22 +146,61 @@ class DiskMonitor extends EventEmitter {
     return { cat: "unknown", action: "notify_only", risk: "未知来源，仅通知", canDelete: false, canMove: false, label: "其他文件" };
   }
 
-  checkFileLock(filePath) {
+  findLockingProcess(filePath) {
+    return new Promise((resolve) => {
+      const handlePath = path.join(__dirname, "..", "bin", "handle64.exe");
+      if (!fs.existsSync(handlePath)) return resolve(null);
+      const child = this.execFile(
+        handlePath,
+        ["-accepteula", "-nobanner", "-a", filePath],
+        { timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 },
+        (err, stdout) => {
+          if (err || !stdout) return resolve(null);
+          const m = stdout.match(/(S+).exes+pid:s*(d+)/i);
+          if (m) resolve({ name: m[1] + ".exe", pid: parseInt(m[2]) });
+          else resolve(null);
+        }
+      );
+      setTimeout(() => { try { child.kill(); resolve(null); } catch {} }, 5000);
+    });
+  }
+
+  async checkFileLock(filePath) {
     try {
       const fd = fs.openSync(filePath, "wx");
       fs.closeSync(fd);
       return { locked: false };
     } catch (err) {
       if (err.code === "EBUSY" || err.code === "EACCES") {
-        return { locked: true, by: "另一个进程正在使用该文件" };
+        const proc = await this.findLockingProcess(filePath);
+        if (proc) {
+          return { locked: true, by: proc.name + "(" + proc.pid + ")", processName: proc.name, pid: proc.pid };
+        }
+        return { locked: true, by: "另一个进程正在使用" };
       }
       return { locked: false };
     }
   }
 
+  // ── Restart-delete (方案 A 保底) ──
+
+  async registerRestartDelete(filePaths) {
+    if (!Array.isArray(filePaths) || filePaths.length === 0) return { ok: false, reason: "no files" };
+    const entries = filePaths.map(f => "'\??\\" + f.replace(///g, "\\") + "'").join(",");
+    const script =
+      'try {  = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager";' +
+      ' = (Get-ItemProperty -Path  -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations;' +
+      ' = @(); if () {  +=  }; ' +
+      " += [string[]]@(" + entries + ", ''); " +
+      'Set-ItemProperty -Path  -Name PendingFileRenameOperations -Value ; ' +
+      "Write-Output 'OK' } catch { Write-Output ('FAIL:'+/e/Projects/c-drive-guardian.Exception.Message) }";
+    const raw = await this.runPowershell(script);
+    return { ok: !!raw && raw === "OK", raw };
+  }
+
   // ── ④ Notification ──
 
-  buildAlertPayload(deltaBytes, files, reason) {
+  async buildAlertPayload(deltaBytes, files, reason) {
     const deltaMB = Math.round(deltaBytes / BYTES_PER_MB);
     const totalCleanable = files.filter(f => f.canDelete).reduce((s, f) => s + (f.Length || 0), 0);
     const totalMovable = files.filter(f => f.canMove).reduce((s, f) => s + (f.Length || 0), 0);
@@ -176,7 +215,7 @@ class DiskMonitor extends EventEmitter {
         size: f.Length || f.length || 0,
         extension: f.Extension || "",
         ...this.classifyFile(f),
-        locked: this.checkFileLock(f.FullName || f.fullName).locked,
+        locked: (await this.checkFileLock()).locked,
       })),
       reason,       // "stable" | "incremental"
       timestamp: Date.now(),
@@ -271,7 +310,7 @@ class DiskMonitor extends EventEmitter {
       // Incremental threshold check
       if (this.cumulativeDeltaBytes >= Number(BYTES_PER_THRESHOLD)) {
         this.queryChangedFiles(5).then(files => {
-          const payload = this.buildAlertPayload(this.cumulativeDeltaBytes, files, "incremental");
+          const payload = await this.buildAlertPayload(this.cumulativeDeltaBytes, files, "incremental");
           this.showBubbleWindow(payload);
           this.emit("alert", payload);
         });
@@ -318,7 +357,7 @@ class DiskMonitor extends EventEmitter {
       ? this._lastScannedFiles
       : await this.queryChangedFiles(5);
     if (files.length === 0 && this.cumulativeDeltaBytes < Number(BYTES_PER_THRESHOLD)) return;
-    const payload = this.buildAlertPayload(
+    const payload = await this.buildAlertPayload(
       reason === "stable" ? this.cumulativeDeltaBytes : deltaBytes,
       files,
       reason
@@ -410,6 +449,10 @@ class DiskMonitor extends EventEmitter {
       if (this.bubbleWindow && !this.bubbleWindow.isDestroyed() && typeof h === "number" && h > 50) {
         try { this.bubbleWindow.setBounds({ ...this.bubbleWindow.getBounds(), height: h }); } catch {}
       }
+    }));
+
+    cleanupFns.push(ipcMain.handle("disk-bubble:restart-delete", async (_event, filePaths) => {
+      return this.registerRestartDelete(filePaths);
     }));
 
     return () => {

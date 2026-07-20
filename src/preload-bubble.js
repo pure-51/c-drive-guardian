@@ -7,4 +7,5 @@ contextBridge.exposeInMainWorld("diskAPI", {
   move: (paths, target) => ipcRenderer.invoke("disk-bubble:move", paths, target),
   dismiss: () => ipcRenderer.invoke("disk-bubble:dismiss"),
   reportHeight: (h) => ipcRenderer.invoke("disk-bubble:height", h),
+  markRestartDelete: (paths) => ipcRenderer.invoke("disk-bubble:restart-delete", paths),
 });

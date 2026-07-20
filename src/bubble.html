@@ -39,6 +39,13 @@ body{padding:6px}
 .dtag.safe{background:var(--green);color:var(--green-t)}
 .dtag.mov{background:var(--yellow);color:var(--yellow-t)}
 .dtag.skip{background:var(--gray);color:var(--gray-t)}
+.dtag.locked{background:rgba(239,68,68,0.12);color:#ef4444}
+.dbtn-reboot{font-size:10px;padding:2px 7px;border-radius:4px;white-space:nowrap;flex-shrink:0;margin-top:1px;cursor:pointer;background:rgba(251,191,36,0.15);color:#fbbf24;border:1px solid rgba(251,191,36,0.2);transition:background .15s}
+.dbtn-reboot:hover{background:rgba(251,191,36,0.3)}
+.dbtn-reboot.done{background:rgba(74,222,128,0.15);color:#4ade80;border-color:rgba(74,222,128,0.2);cursor:default}
+.dtag.safe{background:var(--green);color:var(--green-t)}
+.dtag.mov{background:var(--yellow);color:var(--yellow-t)}
+.dtag.skip{background:var(--gray);color:var(--gray-t)}
 .detail::-webkit-scrollbar{width:4px}
 .detail::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.1);border-radius:2px}
 </style>
@@ -141,14 +148,30 @@ function show(data) {
     var sz = f.size ? "(" + (f.size/1048576).toFixed(1) + "MB," : "(0MB,";
     if (f.canDelete) m.textContent = sz + "可安全删除)";
     else if (f.canMove) m.textContent = sz + "建议移动)";
-    else if (f.locked) m.textContent = sz + "被占用)";
+    else if (f.locked) m.textContent = sz + "被" + (f.by || "占用") + ")";
     else m.textContent = sz + "保留)";
     n.appendChild(p); n.appendChild(m);
     var t = document.createElement("span"); t.className = "dtag";
     if (f.canDelete) { t.classList.add("safe"); t.textContent = "可删除"; }
     else if (f.canMove) { t.classList.add("mov"); t.textContent = "可移动"; }
-    else { t.classList.add("skip"); t.textContent = "保留"; }
+    else if (f.locked) { t.classList.add("locked"); t.textContent = "被占用"; }
+    else { t.classList.add("skip"); t.content = "保留"; }
     r.appendChild(n); r.appendChild(t);
+    if (f.locked) {
+      var rb = document.createElement("span"); rb.className = "dbtn-reboot";
+      rb.textContent = "下次开机删除";
+      rb.dataset.path = f.path;
+      rb.addEventListener("click", function() {
+        var self = this;
+        window.diskAPI.markRestartDelete([this.dataset.path]).then(function(r) {
+          if (r && r.ok) {
+            self.textContent = "✅ 重启生效";
+            self.classList.add("done");
+          }
+        }).catch(function(){});
+      });
+      r.appendChild(rb);
+    }
     detail.appendChild(r);
   }
   // Clean selected button (hidden by default)
