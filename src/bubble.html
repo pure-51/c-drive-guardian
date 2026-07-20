@@ -63,6 +63,22 @@ body{padding:6px}
 var _data = null;
 
 function show(data) {
+  // Merge mode: if bubble already has data, append new files instead of replacing
+  if (_data && _data.files && _data.files.length > 0) {
+    var existingPaths = {};
+    for (var i = 0; i < _data.files.length; i++) {
+      existingPaths[_data.files[i].path] = true;
+    }
+    var newFiles = data.files || [];
+    for (var i = 0; i < newFiles.length; i++) {
+      if (!existingPaths[newFiles[i].path]) {
+        _data.files.push(newFiles[i]);
+      }
+    }
+    data.files = _data.files;
+    data.deltaMB = (_data.deltaMB || 0) + (data.deltaMB || 0);
+    data.deltaBytes = (_data.deltaBytes || 0) + (data.deltaBytes || 0);
+  }
   _data = data;
   var card = document.getElementById("card");
   card.classList.remove("hide");
