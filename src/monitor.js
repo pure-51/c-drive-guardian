@@ -156,7 +156,7 @@ class DiskMonitor extends EventEmitter {
         { timeout: 5000, windowsHide: true, maxBuffer: 1024 * 1024 },
         (err, stdout) => {
           if (err || !stdout) return resolve(null);
-          const m = stdout.match(/(S+).exes+pid:s*(d+)/i);
+          const m = stdout.match(/(\S+)\.exe\s+pid:\s*(\d+)/i);
           if (m) resolve({ name: m[1] + ".exe", pid: parseInt(m[2]) });
           else resolve(null);
         }
@@ -186,14 +186,16 @@ class DiskMonitor extends EventEmitter {
 
   async registerRestartDelete(filePaths) {
     if (!Array.isArray(filePaths) || filePaths.length === 0) return { ok: false, reason: "no files" };
-    const entries = filePaths.map(f => "'\??\\" + f.replace(///g, "\\") + "'").join(",");
+    const entries = filePaths.map(f => "'\\??\\" + f.replace(/\//g, "\\") + "'").join(",");
+    // PowerShell: write to PendingFileRenameOperations for next-boot deletion
     const script =
-      'try {  = "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager";' +
-      ' = (Get-ItemProperty -Path  -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations;' +
-      ' = @(); if () {  +=  }; ' +
-      " += [string[]]@(" + entries + ", ''); " +
-      'Set-ItemProperty -Path  -Name PendingFileRenameOperations -Value ; ' +
-      "Write-Output 'OK' } catch { Write-Output ('FAIL:'+/e/Projects/c-drive-guardian.Exception.Message) }";
+      'try { ' +
+      '$path = "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager"; ' +
+      '$existing = (Get-ItemProperty -Path $path -Name PendingFileRenameOperations -ErrorAction SilentlyContinue).PendingFileRenameOperations; ' +
+      '$new = @(); if ($existing) { $new += $existing }; ' +
+      '$new += [string[]]@(' + entries + ", ''); " +
+      'Set-ItemProperty -Path $path -Name PendingFileRenameOperations -Value $new; ' +
+      "Write-Output 'OK' } catch { Write-Output ('FAIL:' + $_.Exception.Message) }";
     const raw = await this.runPowershell(script);
     return { ok: !!raw && raw === "OK", raw };
   }
@@ -210,13 +212,13 @@ class DiskMonitor extends EventEmitter {
       deltaBytes,
       totalCleanable,
       totalMovable,
-      files: files.map(f => ({
+      files: await Promise.all(files.map(async f => ({
         path: f.FullName || f.fullName,
         size: f.Length || f.length || 0,
         extension: f.Extension || "",
         ...this.classifyFile(f),
-        locked: (await this.checkFileLock()).locked,
-      })),
+        locked: (await this.checkFileLock(f.FullName || f.fullName)).locked,
+      }))),
       reason,       // "stable" | "incremental"
       timestamp: Date.now(),
     };
@@ -309,7 +311,7 @@ class DiskMonitor extends EventEmitter {
 
       // Incremental threshold check
       if (this.cumulativeDeltaBytes >= Number(BYTES_PER_THRESHOLD)) {
-        this.queryChangedFiles(5).then(files => {
+        this.queryChangedFiles().then(async files => {
           const payload = await this.buildAlertPayload(this.cumulativeDeltaBytes, files, "incremental");
           this.showBubbleWindow(payload);
           this.emit("alert", payload);
